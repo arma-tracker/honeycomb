@@ -3,5 +3,6 @@
         "target": "ESNext",
         "outDir": "dist/",
         "moduleResolution": "nodenext"  
-    }
+    },
+    "exclude": ["public/assets/extensions/"]
 }
