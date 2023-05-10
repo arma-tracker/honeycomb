@@ -36,6 +36,13 @@
 										<span><i class="bi bi-grid-fill"></i> Attendance</span>
 									</a>
 								</li>
+								<% groups.forEach(group => { %>
+									<li class="menu-item">
+										<a href=<%= group.url %> class="menu-link">
+											<span><i class="bi bi-grid-fill"></i> <%= group.displayName %></span>
+										</a>
+									</li>
+								<% }) %>
 							</ul>
 						</div>
 					</nav>

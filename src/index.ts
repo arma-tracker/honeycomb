@@ -1,8 +1,14 @@
 import mongoose from 'mongoose'
 import logger from 'skinwalker'
 import ServerState from '../models/serverState.js'
+import GroupModel from '../models/groupModel.js'
 import express from 'express'
 import { readFileSync } from 'fs'
+
+interface Group {
+    displayName: string,
+    url: string
+}
 
 interface StartCallback {
     (): void
@@ -73,9 +79,57 @@ logger.init(getOptions().logLevel, {
 const app = express()
 app.set('view engine', 'ejs');
 app.use('/', express.static('public/')) 
-// app.use('/assets', express.static('public/assets'))
 
 logger.trace(`Options: ${JSON.stringify(getOptions())}`, `honeycomb`)
+
+getSquads().then((groups: Group[]) => {
+        
+    groups.forEach((group: Group) => {
+
+        logger.info(`Creating url "${group.url}"`, `honeycomb`)
+        app.get(`/echo-squad`, async (req,res) => {
+
+            getServerLogs().then(dbState => {
+                logger.trace('dbState: ' + dbState, `honeycomb/${group.url}`)
+        
+            var serverLogs: ServerStateReturnable[] = []
+            // serverLog types are auto assigned by mongoose
+            dbState.forEach( serverLog => {
+                serverLogs.unshift(getMissionData(serverLog))
+            })
+        
+            var chartData: ChartReturnable[] = [];
+            dbState.forEach(element => {
+                
+                var temp: ChartReturnable = {
+                    date: element.date.split('T')[0],
+                    playerCount: element.raw.numplayers  
+                };
+        
+                chartData.unshift(temp)
+        
+            })
+        
+            logger.trace('serverLogs: ' + JSON.stringify(serverLogs), `honeycomb/${group.url}`)
+            logger.trace('chartData: ' + JSON.stringify(chartData), `honeycomb/${group.url}`)
+            
+            getSquads().then((groups: Group[]) => {
+                
+                res.render('index', {
+                    serverLogs: serverLogs,
+                    groups: groups,
+                    chartData: JSON.stringify(chartData)
+                })
+        
+            })
+        
+            })
+        
+        })        
+
+    })
+
+})
 
 app.get('/', async (req,res) => {
 
@@ -102,9 +156,15 @@ app.get('/', async (req,res) => {
 
     logger.trace('serverLogs: ' + JSON.stringify(serverLogs), 'honeycomb')
     logger.trace('chartData: ' + JSON.stringify(chartData), 'honeycomb')
-    res.render('index', {
-        serverLogs: serverLogs,
-        chartData: JSON.stringify(chartData)
+    
+    getSquads().then((groups: Group[]) => {
+        
+        res.render('index', {
+            serverLogs: serverLogs,
+            groups: groups,
+            chartData: JSON.stringify(chartData)
+        })
+
     })
 
     })
@@ -149,6 +209,26 @@ function getMissionData(serverLog, specific: string[] = []): ServerStateReturnab
     const playerCount = playersReturn.split(',').length
 
     return JSON.parse(`{"missionName": "${missionName}","date": "${date}","playerCount": "${playerCount}","players": "${players}"}`);
+}
+
+async function getSquads(): Promise<Group[]> {
+
+    var groups: Group[] = []
+
+    await GroupModel.find().then((groupResponses) => {
+        groupResponses.forEach((group) => {
+            if (!(groups.toString().includes(group.squad))){
+                var temp = {
+                    displayName: group.squad, 
+                    url: group.squad.toLowerCase().replaceAll(' ', '-')
+                }
+                groups.push(temp)
+            }
+        })
+
+    })
+
+    return groups
 }
 
 async function getServerLogs() {
